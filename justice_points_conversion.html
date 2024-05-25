@@ -86,7 +86,7 @@
             gold_per_justice: `Gold per <img height=${i_size} width=${i_size} src=\"jp_converter_button.jpg\"/>`
         }
         function fetchData() {
-            fetch('http://localhost:9000/realm_prices.json')
+            fetch('./realm_prices.json')
                 .then(response => response.json())
                 .then(jsonData => {
                     data = jsonData;
