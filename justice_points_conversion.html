@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realm Prices</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            /* Set the font to Arial */
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table,
+        th,
+        td {
+            border: 1px solid black;
+        }
+
+        th,
+        td {
+            padding: 8px;
+            text-align: left;
+        }
+        select {
+            height: 30px;
+            font-size: 40;
+            font-weight: bold;
+        }
+        .dropdowns {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-direction: column;
+            padding: 30px;
+            width: 150px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Realm Prices</h1>
+    <div style="display:flex;justify-content:center;align-items:space-between;">
+        <div class="dropdowns">
+            <label for="region">Region:</label>
+            <select id="region" onchange="updateDropdowns();updateTable();"></select>
+        </div>
+        <div class="dropdowns">
+            <label for="name">Realm Name:</label>
+            <select id="name" onchange="updateDropdowns();updateTable();"></select>
+        </div>
+        <div class="dropdowns">
+            <label for="faction">Faction:</label>
+            <select id="faction" onchange="updateDropdowns();updateTable();"></select>
+        </div>
+    </div>
+    <div>
+        <h2>Items</h2>
+        <table id="itemsTable">
+            <thead>
+                <tr id="tableHeader">
+                    <!-- Headers will be populated dynamically -->
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- Table rows will be populated dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let data = null;
+        let i_size = 21;
+        let table_header = {
+            id: 'Item ID',
+            name: 'Item',
+            amount: "Amount",
+            cost_jp: `Cost in <img height=${i_size} width=${i_size} src=\"jp_converter_button.jpg\"/>`,
+            gold_price_per: "Unit worth",
+            gold_price_total: "Total worth",
+            gold_per_justice: `Gold per <img height=${i_size} width=${i_size} src=\"jp_converter_button.jpg\"/>`
+        }
+        function fetchData() {
+            fetch('http://localhost:9000/realm_prices.json')
+                .then(response => response.json())
+                .then(jsonData => {
+                    data = jsonData;
+                    updateDropdowns();
+                })
+                .catch(error => console.error('Error fetching the JSON data:', error));
+        }
+
+        function populateDropdown(dropdown, options, selected) {
+            dropdown.innerHTML = "";
+            if (!selected) {
+                selected_fields = [getCookie("selectedRegion"), getCookie("selectedName"), getCookie("selectedFaction")]
+            } else {
+                selected_fields = []
+            }
+            options.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option;
+                opt.text = option;
+                dropdown.appendChild(opt);
+                if (selected_fields.includes(option)) {
+                    selected = option
+                }
+                if (selected) {
+                    for (let i = 0; i < dropdown.options.length; i++) {
+                        if (dropdown.options[i].value === selected) {
+                            dropdown.selectedIndex = i;
+                            break;
+                        }
+                    }
+                } else {
+                    dropdown.selectedIndex = -1;
+                }
+
+            })
+        };
+
+
+        function updateDropdowns() {
+            const regionDropdown = document.getElementById('region');
+            const nameDropdown = document.getElementById('name');
+            const factionDropdown = document.getElementById('faction');
+
+            const selectedRegion = regionDropdown.value;
+            const selectedName = nameDropdown.value;
+            const selectedFaction = factionDropdown.value;
+
+            const realms = data.filter(realm =>
+                (!selectedRegion || realm.region === selectedRegion)
+            );
+
+            const regions = [...new Set(realms.map(realm => realm.region))];
+            const names = [...new Set(realms.map(realm => realm.name))];
+            const factions = [...new Set(realms.map(realm => realm.faction))];
+
+            populateDropdown(regionDropdown, regions, selectedRegion);
+            populateDropdown(nameDropdown, names, selectedName);
+            populateDropdown(factionDropdown, factions, selectedFaction);
+
+            if (regionDropdown.value && nameDropdown.value && factionDropdown.value) {
+                updateTable()
+            }
+        }
+
+        function updateTable() {
+            const regionDropdown = document.getElementById('region');
+            const nameDropdown = document.getElementById('name');
+            const factionDropdown = document.getElementById('faction');
+
+            const selectedRegion = regionDropdown.value;
+            const selectedName = nameDropdown.value;
+            const selectedFaction = factionDropdown.value;
+
+            setCookie("selectedRegion", regionDropdown.value)
+            setCookie("selectedName", nameDropdown.value)
+            setCookie("selectedFaction", factionDropdown.value)
+
+            const realm = data.find(realm =>
+                realm.name === selectedName &&
+                realm.faction === selectedFaction &&
+                realm.region === selectedRegion
+            );
+
+            const tableHeader = document.getElementById('tableHeader');
+            const tableBody = document.getElementById('tableBody');
+
+            tableHeader.innerHTML = "";
+            tableBody.innerHTML = "";
+
+            if (realm && realm.items.length > 0) {
+                // Create table headers
+                Object.keys(realm.items[0]).forEach((key,index) => {
+                    if (key !== 'average_herb_price') {
+                        const th = document.createElement('th');
+                        th.innerHTML = table_header[key];
+                        th.onclick = sortTable(index);
+                        tableHeader.appendChild(th);
+                    }
+                });
+
+                // Create table rows
+                realm.items.forEach(item => {
+                    const tr = document.createElement('tr');
+                    Object.entries(item).forEach(([key, value]) => {
+
+                        if (key !== 'average_herb_price') {
+                            const td = document.createElement('td');
+                            if (key.indexOf("gold_") !== -1) {
+                                td.textContent = formatPrice(value);
+                            } else {
+                                td.textContent = value;
+                            }
+                            tr.appendChild(td);
+                        }
+                    });
+                    tableBody.appendChild(tr);
+                });
+            }
+        }
+
+        function formatPrice(price) {
+            if (isNaN(price)) {
+                return "N/A"
+            }
+            const gold = Math.floor(price / 10000).toLocaleString();
+            const silver = Math.floor((price % 10000) / 100);
+            const copper = Math.floor(price % 100);
+            return `${gold}g ${silver}s ${copper}c`;
+        }
+
+        function setCookie(cookieName, cookieValue) {
+            document.cookie = cookieName + "=" + cookieValue + ";path=/"; // Set cookie
+        }
+        function getCookie(cookieName) {
+            const cookieArray = document.cookie.split(';');
+            for (let i = 0; i < cookieArray.length; i++) {
+                const cookiePair = cookieArray[i].trim();
+                if (cookiePair.startsWith(cookieName + '=')) {
+                    return cookiePair.substring(cookieName.length + 1);
+                }
+            }
+            return null;
+        }
+
+        function sortTable(n) {
+            var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+            table = document.getElementById("itemsTable");
+            switching = true;
+            // Set the sorting direction to ascending:
+            dir = "asc";
+            /* Make a loop that will continue until
+            no switching has been done: */
+            while (switching) {
+                // Start by saying: no switching is done:
+                switching = false;
+                rows = table.rows;
+                /* Loop through all table rows (except the
+                first, which contains table headers): */
+                for (i = 1; i < (rows.length - 1); i++) {
+                    // Start by saying there should be no switching:
+                    shouldSwitch = false;
+                    /* Get the two elements you want to compare,
+                    one from current row and one from the next: */
+                    x = rows[i].getElementsByTagName("TD")[n];
+                    y = rows[i + 1].getElementsByTagName("TD")[n];
+                    /* Check if the two rows should switch place,
+                    based on the direction, asc or desc: */
+                    if (dir == "asc") {
+                        if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+                            // If so, mark as a switch and break the loop:
+                            shouldSwitch = true;
+                            break;
+                        }
+                    } else if (dir == "desc") {
+                        if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+                            // If so, mark as a switch and break the loop:
+                            shouldSwitch = true;
+                            break;
+                        }
+                    }
+                }
+                if (shouldSwitch) {
+                    /* If a switch has been marked, make the switch
+                    and mark that a switch has been done: */
+                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                    switching = true;
+                    // Each time a switch is done, increase this count by 1:
+                    switchcount++;
+                } else {
+                    /* If no switching has been done AND the direction is "asc",
+                    set the direction to "desc" and run the while loop again. */
+                    if (switchcount == 0 && dir == "asc") {
+                        dir = "desc";
+                        switching = true;
+                    }
+                }
+            }
+        }
+        // Initial data fetch
+        fetchData();
+        
+    </script>
+</body>
+
+</html>

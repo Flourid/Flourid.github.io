@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auction Calculator</title>
+    <style>
+        body {
+            display: flex;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            flex-direction: column; /* Ensure vertical alignment */
+        }
+        .container {
+            display: flex;
+            flex: 1;
+            flex-direction: column; /* Arrange elements vertically */
+        }
+        .input-section, .output-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .input-field, .output-field, .output-table, .error-output {
+            width: 49%;
+            height: 200px; /* Adjusted height to accommodate 10 lines without scrolling */
+            padding: 10px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .output-field {
+            background-color: #f1f1f1;
+            border: 1px solid #ccc;
+            resize: none;
+        }
+        .button-container {
+            text-align: right;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .error {
+            color: red;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .green {
+            color: green;
+            font-weight: bold;
+        }
+        .error-output {
+            color: red;
+            background-color: #f1f1f1;
+            border: 1px solid #ccc;
+            resize: none;
+        }
+        @keyframes flash {
+            0% {
+                opacity: 0.5;
+               background-color: red;
+               
+            }
+            100% {
+               background-color: #f1f1f1;
+            }
+         }
+        .flash {
+            animation-name: flash;
+            animation-duration: 0.5s;
+            animation-iteration-count: 1;
+        }
+        .copy-button {
+            position: absolute;
+            top: 30px;
+            right: 35px;
+            padding: 5px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+        }
+        .copy-button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="input-section">
+            <textarea id="requiredMaterials" class="input-field" placeholder="Enter required materials here..."></textarea>
+            <textarea id="output" class="output-field" readonly placeholder="Output will be displayed here..."></textarea>
+            <button class="copy-button" onclick="copyAuctionatorString()">Copy</button>
+        </div>
+        <div class="input-section">
+            <textarea id="prices" class="input-field" placeholder="Enter prices here..."></textarea>
+            <textarea id="errorOutput" class="error-output" readonly placeholder="Error messages will be displayed here..."></textarea>
+        </div>
+        <div class="output-table">
+            <table id="resultsTable">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Amount</th>
+                        <th>Price per Item</th>
+                        <th>Total Price</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3">Total Sum</td>
+                        <td id="totalSum"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    <script>
+        const requiredMaterials = document.getElementById('requiredMaterials');
+        const prices = document.getElementById('prices');
+        const output = document.getElementById('output');
+        const errorOutput = document.getElementById('errorOutput');
+        const resultsTable = document.getElementById('resultsTable').getElementsByTagName('tbody')[0];
+        const totalSum = document.getElementById('totalSum');
+
+        let requiredItems = {};
+
+        requiredMaterials.addEventListener('input', handleRequiredMaterialsInput);
+        prices.addEventListener('input', handlePricesInput);
+
+        function handleRequiredMaterialsInput() {
+            const lines = requiredMaterials.value.trim().split('\n');
+            const validFormat = /^(\d+)x? ([\w\s]+)$/;
+            let isValid = true;
+            let formattedOutput = 'AuctionCalculator^';
+            const namesSet = new Set();
+            requiredItems = {};
+
+            lines.forEach(line => {
+                if (!validFormat.test(line.trim())) {
+                    isValid = false;
+                    return;
+                }
+                const match = validFormat.exec(line.trim());
+                const amount = parseInt(match[1]);
+                const name = match[2].trim();
+                if (name.includes("or")) {
+                    name.split("or").forEach(subName => namesSet.add(subName.trim()));
+                } else {
+                    namesSet.add(name);
+                }
+                requiredItems[name] = (Object.hasOwn(requiredItems, name))? requiredItems[name] + amount : amount;
+            });
+
+            if (isValid) {
+                updateError('');
+                formattedOutput += Array.from(namesSet).map(name => `"${name}"`).join('^');
+                output.value = formattedOutput;
+            } else {
+                updateError('Invalid input format. Each line should be in the format "<amount>x <name>".');
+                output.value = '';
+            }
+            if (prices.value.trim() !== '') {
+                handlePricesInput()
+            }
+        }
+
+        function updateError(msg) {
+            errorOutput.value = msg;
+            if (msg !== '') {
+                errorOutput.classList.add('flash');
+                setTimeout(function () {errorOutput.classList.remove('flash')},1000);
+            } else {
+                errorOutput.classList.remove('flash');
+            }
+        }
+
+        function handlePricesInput() {
+            const priceData = parsePrices(prices.value);
+            let totalSumValue = 0;
+            resultsTable.innerHTML = '';
+
+            for (const [name, amount] of Object.entries(requiredItems)) {
+                let names = name.includes("or") ? name.split("or").map(n => n.trim()) : [name];
+                let minPrice = Math.min(...names.map(n => priceData[n] || Infinity));
+                if (minPrice === Infinity) {
+                    minPrice = 0;
+                }
+                const totalPrice = minPrice * amount;
+                totalSumValue += totalPrice;
+                const row = resultsTable.insertRow();
+                row.insertCell(0).innerText = name;
+                row.insertCell(1).innerText = amount;
+                row.insertCell(2).innerText = formatPrice(minPrice);
+                row.insertCell(3).innerText = formatPrice(totalPrice);
+                if (name.includes("or")) {
+                    const minName = names.find(n => priceData[n] === minPrice);
+                    const nameCell = Array.from(row.cells).find(cell => cell.innerText.includes(minName));
+                    let fullCellText = nameCell.innerText.replace(minName,'<span class="green">'+minName+'</span>')
+                    nameCell.innerHTML = fullCellText
+                }
+            }
+            totalSum.innerText = formatPrice(totalSumValue);
+        }
+
+        function parsePrices(priceInput) {
+            const priceData = {};
+            const lines = priceInput.trim().split('\n').slice(1); // Ignore the header line
+            lines.forEach(line => {
+                const [price, name] = line.split(',').map(item => item.replace(/"/g, '').trim());
+                priceData[name] = parseFloat(price);
+            });
+            return priceData;
+        }
+
+        function formatPrice(price) {
+            const gold = Math.floor(price / 10000).toLocaleString();
+            const silver = Math.floor((price % 10000) / 100);
+            const copper = price % 100;
+            return `${gold}g ${silver}s ${copper}c`;
+        }
+
+        function copyAuctionatorString() {
+            output.select();
+            document.execCommand('copy');
+        }
+    </script>
+</body>
+</html>

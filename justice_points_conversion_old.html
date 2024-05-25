@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>JP Exchange</title>
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            flex-direction: column;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
+
+        .input-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+
+        .text-field {
+            width: calc(50% - 10px);
+            /* Adjust spacing */
+            height: 200px;
+            padding: 10px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        .readonly-field {
+            background-color: #e9ecef;
+            border: 1px solid #ced4da;
+        }
+
+        .editable-field {
+            border: 1px solid #ced4da;
+        }
+
+        .copy-button {
+            position: absolute;
+            top: 35px;
+            right: calc(50% + 30px);
+            padding: 5px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+        }
+
+        .copy-button:hover {
+            background-color: #0056b3;
+        }
+
+        table {
+            width: fit-content;
+            border-collapse: collapse;
+            margin-top: 20px;
+            table-layout: auto;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+        .value-per-input {
+            width: 100px;
+            height: 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="input-section">
+            <textarea class="text-field readonly-field" id="auctionator-string" readonly></textarea>
+            <textarea class="text-field editable-field" id="price-input"
+                placeholder="Enter Auctionator price export here..."></textarea>
+            <button class="copy-button" onclick="copyAuctionatorString()">Copy</button>
+        </div>
+    </div>
+    <div class="container">
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Amount</th>
+                <th>Cost JP</th>
+                <th>Value Gold Per</th>
+                <th>Value Gold Total</th>
+                <th>Gold per JP</th>
+            </tr>
+            <!-- JavaScript will populate this section -->
+        </table>
+    </div>
+
+
+    <script>
+        // Array of items
+        const items_raw = [
+            "Heartblossom",
+            "Cinderbloom",
+            "Twilight Jasmine",
+            "Whiptail",
+            "Azshara's Veil",
+            "Stormvine",
+            "Elementium Ore",
+            "Embersilk Cloth",
+            "Greater Celestial Essence",
+            "Heavenly Shard",
+            "Hypnotic Dust",
+            "Savage Leather"
+        ];
+
+        const items = [
+            { name: "Satchel of Freshly-Picked Herbs", amount: 1, cost_jp: 1500, value_per: 10000 },
+            { name: "Elementium Ore", amount: 20, cost_jp: 1000, value_per: 10000 },
+            { name: "Embersilk Cloth", amount: 20, cost_jp: 1250, value_per: 10000 },
+            { name: "Greater Celestial Essence", amount: 1, cost_jp: 400, value_per: 10000 },
+            { name: "Heavenly Shard", amount: 1, cost_jp: 600, value_per: 10000 },
+            { name: "Hypnotic Dust", amount: 1, cost_jp: 100, value_per: 10000 },
+            { name: "Savage Leather", amount: 5, cost_jp: 375, value_per: 10000 }
+        ];
+
+        // Setting the left text field value
+        document.getElementById('auctionator-string').value = `JP_Exchange "${items_raw.join('"^"')}"`;
+
+        let tableBody = document.createElement('tbody');
+        items.forEach((item, index) => {
+            let row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.name}</td>
+                <td>${item.amount}</td>
+                <td>${item.cost_jp}</td>
+                <td><input type="number" class="value-per-input" data-index="${index}" value="${item.value_per || ''}"></td>
+                <td class="value-gold-total"></td>
+                <td class="gold-per-jp"></td>
+            `;
+            tableBody.appendChild(row);
+        });
+        // Append the table body to the table
+        document.querySelector('table').appendChild(tableBody);
+
+        function calculateAndUpdateValues() {
+            const valuePerInputs = document.querySelectorAll('.value-per-input');
+            valuePerInputs.forEach((input, index) => {
+                const amount = items[index].amount;
+                const costJP = items[index].cost_jp;
+                const valuePer = parseInt(input.value) || 0;
+                const valueGoldTotal = parseInt(input.value) * amount;
+                const goldPerJP = valueGoldTotal / costJP;
+                input.closest('tr').querySelector('.value-gold-total').textContent = formatPrice(valueGoldTotal);
+                input.closest('tr').querySelector('.gold-per-jp').textContent = formatPrice(goldPerJP);
+            });
+        }
+
+        // Event listener for input change
+        document.addEventListener('input', function (event) {
+            if (event.target.classList.contains('value-per-input')) {
+                calculateAndUpdateValues();
+            }
+        });
+
+        // Initial calculation
+        calculateAndUpdateValues();
+
+        function copyAuctionatorString() {
+            let auctionator_string = document.getElementById('auctionator-string');
+            auctionator_string.select();
+            document.execCommand('copy');
+        }
+
+        function formatPrice(price) {
+            if (Number.isNaN(price)) {
+                price = 0
+            }
+            const gold = Math.floor(price / 10000).toLocaleString();
+            const silver = Math.floor((price % 10000) / 100);
+            const copper = Math.floor(price % 100);
+            return `${gold}g ${silver}s ${copper}c`;
+        }
+    </script>
+</body>
+
+</html>
